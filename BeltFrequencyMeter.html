@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fundamental Frequency (from audio)</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#121a33; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#7cffb3; --warn:#ffd166;
+  }
+  html, body {height:100%;}
+  body{
+    margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
+    background: radial-gradient(1200px 800px at 20% 10%, #101a36 0%, #0b1020 60%);
+    color:#e7eef8; display:flex; align-items:center; justify-content:center; padding:24px; padding-bottom:96px;
+  }
+  .app{width:min(920px, 100%);}
+  .card{background:var(--panel); border:1px solid #1e2747; border-radius:18px; padding:18px 18px; box-shadow: 0 10px 40px rgba(0,0,0,.35)}
+  .title{font-weight:700; letter-spacing:.2px; margin:0 0 12px 0; font-size:22px; color:#dfe9ff}
+  .uploader{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+  .drop{flex:1; min-width:260px; cursor:pointer; user-select:none; background:#0e1730; border:2px dashed #2a3a73; border-radius:14px; padding:16px; text-align:center; color:var(--muted)}
+  .drop:hover{border-color:#4157a8; color:#c7d5ea}
+  input[type=file]{display:none}
+  .btn{background:#1b2a57; color:#e8f4ff; padding:10px 14px; border:1px solid #2a3f7a; border-radius:12px; cursor:pointer; font-weight:600}
+  .btn:disabled{opacity:.55; cursor:not-allowed}
+  .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+  .meta{font-size:13px; color:var(--muted)}
+  .big{display:flex; align-items:flex-end; gap:16px; justify-content:center; padding:20px 10px}
+  .big .value{font-size:min(14vw, 96px); font-weight:800; line-height:1; letter-spacing:1px; color:var(--accent); text-shadow: 0 0 16px rgba(110,231,255,.25)}
+  .big .unit{font-size:min(8vw, 40px); color:#b8d7ff}
+  .badge{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#cfe7ff; background:#0f2346; border:1px solid #21417e; padding:6px 10px; border-radius:999px}
+  .grid{display:grid; grid-template-columns: 1fr; gap:12px;}
+  .field{display:flex; align-items:center; gap:8px; color:#cfe0ff}
+  .field input{width:84px; background:#0f1a33; border:1px solid #283d77; color:#e4f2ff; padding:8px 10px; border-radius:10px}
+  .status{min-height:22px; font-size:13px; color:var(--muted)}
+  .spinner{width:16px; height:16px; border:3px solid #27427e; border-top-color:#6ee7ff; border-radius:50%; animation:spin .9s linear infinite; display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  audio{width:100%;}
+  .foot{margin-top:10px; font-size:12px; color:#a7bfd9}
+  .ok{color:var(--ok)}
+  .warn{color:var(--warn)}
+.btn.small{ padding:6px 10px; font-size:12px; }
+  .btn.active{ background:#25407d; }
+.btn.small{ padding:6px 10px; font-size:12px; }
+  .btn.active{ background:#25407d; }
+  .btn.record.recording{ background:#7d2525; border-color:#8b2c2c; }
+  .record-ind{ width:10px; height:10px; border-radius:50%; background:#ff595e; display:inline-block; margin-right:8px; box-shadow:0 0 8px rgba(255,89,94,.65); }
+.btn.small{ padding:6px 10px; font-size:12px; }
+  .btn.active{ background:#25407d; }
+  .btn.record.recording{ background:#7d2525; border-color:#8b2c2c; }
+  .record-ind{ width:10px; height:10px; border-radius:50%; background:#ff595e; display:inline-block; margin-right:8px; box-shadow:0 0 8px rgba(255,89,94,.65); }
+  .about-wrap{ position:fixed; left:0; right:0; bottom:16px; display:flex; justify-content:center; pointer-events:none; }
+  .about-wrap .about-btn{ pointer-events:auto; }
+  .btn.about-btn{ background:linear-gradient(135deg,#1b2a57,#274494); border:1px solid #2a3f7a; padding:12px 22px; border-radius:999px; font-weight:700; letter-spacing:.2px; }
+  .btn.about-btn:hover{ filter:brightness(1.1); }
+  .modal{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:1000; }
+  .modal:not(.hidden){ display:flex; }
+  .modal-dialog{ background:var(--panel); border:1px solid #1e2747; border-radius:16px; padding:20px 22px; max-width:min(90vw,520px); text-align:center; box-shadow:0 12px 48px rgba(0,0,0,.5); }
+  .modal-title{ font-size:18px; font-weight:800; color:#dfe9ff; margin:0 0 8px 0; }
+  .modal a{ color:var(--accent); text-decoration:underline; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="card" style="margin-bottom:12px;">
+      <h1 class="title">Fundamental frequency from audio file</h1>
+      <div class="uploader">
+        <label class="drop" id="drop">
+          <input id="file" type="file" accept="audio/*" />
+          <div><strong>Click / Drag</strong> your audio here (WAV/MP3/M4A…)</div>
+          <div class="meta">Analysis is local; nothing is uploaded.</div>
+        </label>
+        <div class="grid" style="min-width:220px;">
+          <div class="field"><label for="fmin">Fmin</label><input id="fmin" type="number" value="20" min="10" max="1000" step="1">Hz</div>
+          <div class="field"><label for="fmax">Fmax</label><input id="fmax" type="number" value="900" min="30" max="2000" step="1">Hz</div>
+          <div class="row">
+            <button class="btn" id="analyze" disabled>Analyze</button>
+            <button class="btn record" id="recordBtn" type="button"><span class="record-ind"></span>Record</button>
+            <span class="status" id="status"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px; text-align:center;">
+      <div class="row" style="justify-content:center; gap:8px; margin-bottom:8px;">
+        <span class="badge">Display:</span>
+        <div class="seg">
+          <button class="btn small active" id="modeHz" type="button">Hz</button>
+          <button class="btn small" id="modeNote" type="button">Note</button>
+        </div>
+      </div>
+      <div class="big">
+        <div class="value" id="freq">—</div>
+        <div class="unit">Hz</div>
+      </div>
+      <div class="row" style="justify-content:center; gap:10px;">
+        <span class="badge" id="confidence">Confidence: —</span>
+        <span class="badge" id="info">—</span>
+      </div>
+      <div class="foot" id="note">Tip: usa un tramo con buen nivel y poco ruido. The app finds the most energetic segment before measuring.</div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="align-items:flex-start; gap:12px;">
+        <audio id="player" controls></audio>
+      </div>
+    </div>
+  </div>
+
+<div class="about-wrap">
+  <button class="btn about-btn" id="aboutBtn" type="button">About</button>
+</div>
+
+<div class="modal hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+  <div class="modal-dialog">
+    <div class="modal-title" id="aboutTitle">Belt Frequency Meter V01 (HTML5)</div>
+    <p><a href="https://github.com/FireRayo" target="_blank" rel="noopener">https://github.com/FireRayo</a></p>
+    <button class="btn small" id="closeAbout" type="button">Close</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const fileInput = document.getElementById('file');
+  const drop = document.getElementById('drop');
+  const analyzeBtn = document.getElementById('analyze');
+  const statusEl = document.getElementById('status');
+  const freqEl = document.getElementById('freq');
+  const confEl = document.getElementById('confidence');
+  const infoEl = document.getElementById('info');
+  const fminEl = document.getElementById('fmin');
+  const fmaxEl = document.getElementById('fmax');
+  const player = document.getElementById('player');
+  const unitEl = document.querySelector('.big .unit');
+  const recordBtn = document.getElementById('recordBtn');
+  recordBtn.addEventListener('pointerdown', startRecording);
+  ['pointerup','pointerleave','pointercancel'].forEach(evt => recordBtn.addEventListener(evt, stopRecording));
+
+  let audioCtx = null;
+  let audioBuffer = null;
+  let objectUrl = null;
+  let displayMode = 'hz';
+  let currentFreq = NaN;
+  let mediaStream = null, mediaRecorder = null, recChunks = [];
+  let recTimer = null, recStart = 0, recMimeType = '';
+
+  function setStatus(msg, spinning=false){
+    statusEl.innerHTML = spinning ? `<span class="spinner"></span> ${msg}` : msg;
+  }
+
+  function setFreqDisplay(hz){
+    if (!isFinite(hz) || hz<=0){
+      freqEl.textContent = '—';
+    } else {
+      const n = hz < 100 ? 1 : (hz < 1000 ? 1 : 0);
+      freqEl.textContent = hz.toFixed(n);
+    }
+  }
+
+  function setConfidenceDisplay(p){
+    if (!isFinite(p)) { confEl.textContent = 'Confidence: —'; return; }
+    const pct = Math.max(0, Math.min(1, p));
+    const label = `Confidence: ${(pct*100).toFixed(0)}%`;
+    confEl.textContent = label;
+  }
+  function hzToNote(freq){
+    if (!isFinite(freq) || freq<=0) return {name:'—', cents: NaN};
+    const midi = 69 + 12*Math.log2(freq/440);
+    const nearest = Math.round(midi);
+    const cents = Math.round(100*(midi - nearest));
+    const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const note = names[(nearest%12+12)%12] + (Math.floor(nearest/12)-1);
+    return {name: note, cents};
+  }
+
+  function updateDisplay(){
+    if (!isFinite(currentFreq) || currentFreq<=0){
+      freqEl.textContent = '—';
+      unitEl.textContent = (displayMode==='hz' ? 'Hz' : 'Note');
+      return;
+    }
+    if (displayMode==='hz'){
+      setFreqDisplay(currentFreq);
+      unitEl.textContent = 'Hz';
+    } else {
+      const r = hzToNote(currentFreq);
+      freqEl.textContent = r.name;
+      unitEl.textContent = (isFinite(r.cents) && Math.abs(r.cents)>=1) ? `${r.cents>0?'+':''}${r.cents} cents` : 'Note';
+    }
+  }
+
+  function bytesToObjectUrl(file){
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    return objectUrl;
+  }
+
+  function avgChannelsToMono(buffer){
+    const { numberOfChannels, length } = buffer;
+    if (numberOfChannels === 1) return buffer.getChannelData(0).slice(0);
+    const out = new Float32Array(length);
+    for (let ch=0; ch<numberOfChannels; ch++){
+      const data = buffer.getChannelData(ch);
+      for (let i=0;i<length;i++) out[i] += data[i];
+    }
+    for (let i=0;i<length;i++) out[i] /= numberOfChannels;
+    return out;
+  }
+
+  function findLoudestWindow(x, sr, winSec=1.0, hopSec=0.1){
+    const N = x.length;
+    const win = Math.max(1, Math.floor(sr*winSec));
+    const hop = Math.max(1, Math.floor(sr*hopSec));
+    if (N<=win) return {start:0, length:N};
+    const prefix = new Float64Array(N+1);
+    for (let i=0;i<N;i++) prefix[i+1] = prefix[i] + x[i]*x[i];
+    let bestStart=0, bestE=-Infinity;
+    for (let s=0; s+win<=N; s+=hop){
+      const e = prefix[s+win] - prefix[s];
+      if (e>bestE){ bestE=e; bestStart=s; }
+    }
+    return {start:bestStart, length:win};
+  }
+
+  function downsample(x, factor){
+    if (factor<=1) return x.slice(0);
+    const N = Math.floor(x.length / factor);
+    const y = new Float32Array(N);
+    for (let i=0;i<N;i++) y[i] = x[i*factor];
+    return y;
+  }
+
+  function hannInPlace(x){
+    const N = x.length;
+    for (let i=0;i<N;i++){
+      const w = 0.5*(1 - Math.cos(2*Math.PI*i/(N-1)));
+      x[i] *= w;
+    }
+    return x;
+  }
+
+  // YIN pitch detection (simplificado) en rango [fmin, fmax]
+  function yinFundamental(x, sr, fmin, fmax, threshold=0.1){
+    const N = x.length;
+    if (N < 64) return {freq: NaN, confidence: 0};
+    const tauMin = Math.max(2, Math.floor(sr / fmax));
+    const tauMax = Math.min(N-3, Math.floor(sr / fmin));
+    if (!(tauMax > tauMin+2)) return {freq: NaN, confidence: 0};
+
+    // Función de diferencia d(τ)
+    const yin = new Float64Array(tauMax+1);
+    for (let tau=1; tau<=tauMax; tau++){
+      let sum=0; const L = N - tau;
+      for (let i=0;i<L;i++){
+        const d = x[i] - x[i+tau]; sum += d*d;
+      }
+      yin[tau] = sum;
+    }
+    // CMNDF
+    const cmndf = new Float64Array(tauMax+1);
+    cmndf[0] = 1; let runningSum=0;
+    for (let tau=1; tau<=tauMax; tau++){
+      runningSum += yin[tau];
+      cmndf[tau] = yin[tau] * tau / (runningSum || 1);
+    }
+
+    // Buscar primer τ por debajo del umbral y mínimo local
+    let tauEstimate = -1;
+    for (let tau=tauMin+1; tau<tauMax-1; tau++){
+      if (cmndf[tau] < threshold && cmndf[tau] <= cmndf[tau-1] && cmndf[tau] <= cmndf[tau+1]){
+        tauEstimate = tau; break;
+      }
+    }
+    // Si no se encontró, usar mínimo global en el rango
+    if (tauEstimate < 0){
+      let minV = Infinity, minI = -1;
+      for (let tau=tauMin; tau<=tauMax; tau++){
+        if (cmndf[tau] < minV){ minV = cmndf[tau]; minI = tau; }
+      }
+      tauEstimate = minI;
+    }
+
+    // Interpolación parabólica alrededor de tauEstimate
+    let tauRef = tauEstimate;
+    if (tauEstimate>1 && tauEstimate<tauMax){
+      const y1 = cmndf[tauEstimate-1], y2 = cmndf[tauEstimate], y3 = cmndf[tauEstimate+1];
+      const denom = (y1 - 2*y2 + y3);
+      const off = denom !== 0 ? 0.5*(y1 - y3)/denom : 0;
+      tauRef = Math.max(1, Math.min(tauMax, tauEstimate + off));
+    }
+
+    const freq = sr / tauRef;
+    const confidence = Math.max(0, Math.min(1, 1 - cmndf[tauEstimate]));
+    return {freq, confidence};
+  }
+
+  function pickBestMime(){
+    const prefs = ['audio/webm;codecs=opus','audio/webm','audio/mp4'];
+    for (const t of prefs){ try{ if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t; }catch{} }
+    return '';
+  }
+
+  async function ensureStream(){
+    if (mediaStream && mediaStream.active) return mediaStream;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      setStatus('Recording not supported (need HTTPS & a compatible browser).');
+      throw new Error('getUserMedia not available');
+    }
+    mediaStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    return mediaStream;
+  }
+
+  function setupRecorder(){
+    recMimeType = pickBestMime();
+    mediaRecorder = new MediaRecorder(mediaStream, recMimeType ? {mimeType: recMimeType} : undefined);
+    mediaRecorder.ondataavailable = (e)=>{ if (e.data && e.data.size>0) recChunks.push(e.data); };
+    mediaRecorder.onstop = async ()=>{
+      try{
+        const type = recMimeType || (recChunks[0] ? recChunks[0].type : 'audio/webm');
+        const blob = new Blob(recChunks, {type}); recChunks = [];
+        let ext = 'webm'; if ((type||'').includes('mp4')) ext='m4a';
+        const file = new File([blob], `recording.${ext}`, {type});
+        await handleFile(file);
+      }catch(err){ console.error(err); setStatus('Could not process recording.'); }
+    };
+  }
+
+  async function startRecording(ev){
+    try{
+      await ensureStream();
+      if (!mediaRecorder || mediaRecorder.state==='inactive') setupRecorder();
+      recChunks = []; recStart = performance.now();
+      if (ev && ev.pointerId && recordBtn.setPointerCapture){ try{ recordBtn.setPointerCapture(ev.pointerId);}catch{} }
+      recordBtn.classList.add('active','recording');
+      mediaRecorder.start();
+      setStatus('Recording… 0.0 s (release to stop)');
+      recTimer = setInterval(()=>{
+        const t = (performance.now()-recStart)/1000;
+        setStatus(`Recording… ${t.toFixed(1)} s (release to stop)`);
+      }, 100);
+    }catch(err){
+      console.error(err);
+      setStatus('Microphone permission denied or unsupported.');
+    }
+  }
+
+  function stopRecording(){
+    try{
+      if (recTimer){ clearInterval(recTimer); recTimer=null; }
+      if (mediaRecorder && mediaRecorder.state==='recording'){
+        mediaRecorder.stop();
+        setStatus('Processing recording…', true);
+      }
+    } finally {
+      recordBtn.classList.remove('recording');
+      if (mediaStream){ mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
+    }
+  }
+
+  async function decodeFile(file){
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = await file.arrayBuffer();
+    setStatus('Decoding audio…', true);
+    const ab = await audioCtx.decodeAudioData(buf);
+    return ab;
+  }
+
+  function analyze(){
+    if (!audioBuffer){ setStatus('Carga un archivo primero.'); return; }
+    const fmin = Math.max(10, Number(fminEl.value)||20);
+    const fmax = Math.max(fmin+10, Number(fmaxEl.value)||900);
+    setStatus('Analyzing…', true);
+    currentFreq = NaN; updateDisplay(); setConfidenceDisplay(NaN);
+
+    const sr = audioBuffer.sampleRate;
+    let mono = avgChannelsToMono(audioBuffer);
+
+    // Seleccionar el segmento más enérgico (~1 s) para evitar silencios
+    const seg = findLoudestWindow(mono, sr, 1.0, 0.10);
+    mono = mono.subarray(seg.start, seg.start + seg.length);
+
+    // Quitar DC
+    let mean = 0; for (let i=0;i<mono.length;i++) mean += mono[i]; mean/=mono.length; for (let i=0;i<mono.length;i++) mono[i]-=mean;
+
+    // Decimar a ~8 kHz para acelerar YIN
+    const target = 8000;
+    const decim = Math.max(1, Math.floor(sr / target));
+    const srDown = sr / decim;
+    let x = downsample(mono, decim);
+    hannInPlace(x);
+
+    const {freq, confidence} = yinFundamental(x, srDown, fmin, fmax, 0.1);
+    if (!isFinite(freq) || freq<=0){
+      setStatus('Could not estimate. Try another segment or adjust Fmin/Fmax.');
+      currentFreq = NaN; updateDisplay(); setConfidenceDisplay(NaN);
+      infoEl.textContent = `fs=${sr.toFixed(0)} Hz  ·  win=${(seg.length/sr).toFixed(2)} s`;
+      return;
+    }
+
+    currentFreq = freq; updateDisplay();
+    setConfidenceDisplay(confidence);
+    infoEl.textContent = `fs=${sr.toFixed(0)} Hz  ·  win=${(seg.length/sr).toFixed(2)} s  ·  range=${fmin}-${fmax} Hz`;
+    setStatus('Done');
+  }
+
+  // Eventos de UI
+  drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.style.borderColor = '#6ee7ff'; });
+  drop.addEventListener('dragleave', e=>{ drop.style.borderColor = '#2a3a73'; });
+  drop.addEventListener('drop', async (e)=>{
+    e.preventDefault(); drop.style.borderColor = '#2a3a73';
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) await handleFile(f);
+  });
+  drop.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if (f) await handleFile(f);
+  });
+
+  async function handleFile(f){
+    currentFreq = NaN; updateDisplay(); setConfidenceDisplay(NaN);
+    setStatus(`Loading \"${f.name}"…`, true);
+    try{
+      audioBuffer = await decodeFile(f);
+      analyzeBtn.disabled = false;
+      setStatus(`Loaded: ${(audioBuffer.duration).toFixed(2)} s`);
+      const url = bytesToObjectUrl(f);
+      player.src = url; player.load();
+      // Auto-analizar al cargar
+      analyze();
+    }catch(err){
+      console.error(err);
+      analyzeBtn.disabled = true; audioBuffer = null;
+      setStatus('Could not read/decode the audio (try WAV/MP3).');
+    }
+  }
+
+  analyzeBtn.addEventListener('click', analyze);
+
+  const modeHz = document.getElementById('modeHz');
+  const modeNote = document.getElementById('modeNote');
+  modeHz.addEventListener('click', ()=>{
+    displayMode='hz'; modeHz.classList.add('active'); modeNote.classList.remove('active'); updateDisplay();
+  });
+  modeNote.addEventListener('click', ()=>{
+    displayMode='note'; modeNote.classList.add('active'); modeHz.classList.remove('active'); updateDisplay();
+  });
+
+  // About modal wiring
+  const aboutBtn = document.getElementById('aboutBtn');
+  const aboutModal = document.getElementById('aboutModal');
+  const closeAbout = document.getElementById('closeAbout');
+  if (aboutBtn && aboutModal && closeAbout){
+    aboutBtn.addEventListener('click', ()=> aboutModal.classList.remove('hidden'));
+    closeAbout.addEventListener('click', ()=> aboutModal.classList.add('hidden'));
+    aboutModal.addEventListener('click', (e)=>{ if (e.target === aboutModal) aboutModal.classList.add('hidden'); });
+    document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') aboutModal.classList.add('hidden'); });
+  }
+})();
+</script>
+</body>
+</html>
