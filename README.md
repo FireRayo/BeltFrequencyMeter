@@ -24,7 +24,7 @@ This project was created to solve `some rubber belts and composite materials can
 
 ## 🖼 Screenshots
 <p align="center">
-  <img src="assets/IMG04.PNG" alt="Main screen" width="600">
+  <img src="assets/IMG04.png" alt="Main screen" width="600">
 </p>
 
 ---
