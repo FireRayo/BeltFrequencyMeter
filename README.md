@@ -1,7 +1,7 @@
 
 # BeltFrequencyMeter
 
-> Acoustic belt tension meter accurately measures tension on static rubber belts.  
+> Acoustic belt tension meter accurately get the fundamental frequency on static rubber belts.  
 
 ---
 
@@ -24,7 +24,7 @@ This project was created to solve `some rubber belts and composite materials can
 
 ## 🖼 Screenshots
 <p align="center">
-  <img src="assets/IMG03.JPG" alt="Main screen" width="600">
+  <img src="assets/IMG04.JPG" alt="Main screen" width="600">
 </p>
 
 ---
@@ -42,3 +42,4 @@ This project was created to solve `some rubber belts and composite materials can
 ## Link to use the app
 
 [https://firerayo.github.io/BeltFrequencyMeter/](https://firerayo.github.io/BeltFrequencyMeter/)
+
